@@ -1,11 +1,11 @@
 <?php
 
 if(!function_exists("download_url")){
-    require_once(ABSPATH."wp-admin/admin-functions.php");
+    require_once(ABSPATH."wp-admin/includes/admin.php");
 }
 
 function instagramy_goodness_redirecturl(){
-    $redirecturl = (isset($_SERVER["HTTPS"]) ? "https://" : "http://") . $_SERVER['HTTP_HOST'] . "/wp-admin/tools.php?page=instagramy_goodness";
+    $redirecturl = site_url() . "/wp-admin/tools.php?page=instagramy_goodness";
     return $redirecturl;
 }
 
