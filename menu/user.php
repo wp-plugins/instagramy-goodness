@@ -17,7 +17,7 @@ function instagramy_goodness_user(){
         update_user_option($user->ID,"instagramy_goodness_id",$tokendata->user->id,true);
         update_user_option($user->ID,"instagramy_goodness_username",$tokendata->user->username,true);
     }
-    if(isset($_POST['submit'])){
+    if(isset($_POST['submit']) && ($_POST['ig_form'] === 'settings')){
         check_admin_referer( 'ig_settings_'.$user->ID );
         $ig_user_day_post = sanitize_key((int)$_POST['day']);
         $ig_user_time_post = sanitize_key((int)$_POST['time']);
@@ -27,6 +27,38 @@ function instagramy_goodness_user(){
         update_user_option($user->ID,"instagramy_goodness_time",$ig_user_time_post, true);
         update_user_option($user->ID,"instagramy_goodness_format",$ig_user_format_post, true);
         update_user_option($user->ID,"instagramy_goodness_title",$ig_user_title_post, true);
+	    ?>
+	    <div id="message" class="updated"><p><?php _e('Settings saved.');?></p></div>
+        <?php
+    } elseif(isset($_POST['submit']) && ($_POST['ig_form'] === 'createpost')){
+	    check_admin_referer( 'ig_settings_'.$user->ID );
+	    $createpost_status = instagramy_goodness_create_simple_post( $user->ID, false );
+        if($createpost_status < instagramy_goodness_status::NOTOKEN){
+            ?>
+            <div id="message" class="updated"><p><?php _e('Draft created.',"instagramy_goodness");?></p></div>
+        <?php
+        } else {
+            switch($createpost_status){
+                case instagramy_goodness_status::NOTOKEN:
+                    $message = __("It looks like you are not properly connected to Instagram.","instagramy_goodness");
+                    break;
+                case instagramy_goodness_status::SIDELOADERROR:
+                    $message = __("There is a problem loading your pictures. This might be an indicator that this plugin might not be working on your system.","instagramy_goodness");
+                    break;
+                case instagramy_goodness_status::NOPHOTOS:
+                    $message = __("There have been no new pictures since your last post.","instagramy_goodness");
+                    break;
+                case instagramy_goodness_status::NOTNOW:
+                    $message = __("Not now, honey.","instagramy_goodness");
+                    break;
+                default:
+                    $message = __("Something went wrong.","instagramy_goodness");
+                    break;
+            }
+            ?>
+                <div id="message" class="error"><p><?php echo $message ?></p></div>
+            <?php
+        }
     }
     $token = get_user_option("instagramy_goodness_token");
     ?>
@@ -57,6 +89,31 @@ function instagramy_goodness_user(){
         $ig_user_title = get_user_option("instagramy_goodness_title");
         ?>
     <p><?php printf(__("Good job! Instagram said your name is <em>%s</em>.","instagramy_goodness"),$ig_username);?></p>
+    <?php
+    $lastpost = get_user_option("instagramy_goodness_lastpost",$user->ID);
+    if(!$lastpost){
+	    $lastpost = time() - WEEK_IN_SECONDS;
+    }
+
+    $lastpost += 1;
+
+    // We will set the time of the youngest picture here
+    $lastpicturetime = 0;
+
+    // And here we get the pictures
+    $ig = new instagramy_goodness();
+    $ig->setToken($token);
+    $ig->setUserId($user->ID);
+    $pictures = $ig->getOwnMedia(0, $lastpost);
+	if(count($pictures->data) < 1){
+		echo "<p>".__("You have no images for the next post.",'instagramy_goodness')."</p>";
+	} else {
+		echo "<h3>".__("Your next post should have these images:",'instagramy_goodness')."</h3>";
+		foreach($pictures->data as $picture) {
+			printf("<a href='%s'><img src='%s' alt='%s' title='%s'></a> \n",$picture->link,$picture->images->thumbnail->url,$picture->caption->text,$picture->caption->text);
+		}
+	}
+    ?>
     <h2><?php _e("Settings");?></h2>
     <form method="post">
         <h3><?php _e("Title");?></h3>
@@ -95,11 +152,20 @@ function instagramy_goodness_user(){
                 </td>
             </tr>
         </table>
+	    <input type="hidden" name="ig_form" value="settings">
         <?php wp_nonce_field( 'ig_settings_'.$user->ID ); ?>
         <?php submit_button('Update'); ?>
     </form>
     <?php
     } ?>
+	<?php if(count($pictures->data) > 0 ){?>
+	<h2><?php _e("Post now!","instagramy_goodness"); ?></h2>
+		<form method="post">
+			<input type="hidden" name="ig_form" value="createpost">
+			<?php wp_nonce_field( 'ig_settings_'.$user->ID ); ?>
+			<?php submit_button(__("Post now!","instagramy_goodness")); ?>
+		</form>
+	<?php } ?>
 </div>
 <?php
 }

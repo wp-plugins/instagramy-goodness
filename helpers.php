@@ -1,11 +1,11 @@
 <?php
 
 if(!function_exists("download_url")){
-    require_once(ABSPATH."wp-admin/admin-functions.php");
+    require_once(ABSPATH."wp-admin/includes/admin.php");
 }
 
 function instagramy_goodness_redirecturl(){
-    $redirecturl = (isset($_SERVER["HTTPS"]) ? "https://" : "http://") . $_SERVER['HTTP_HOST'] . "/wp-admin/tools.php?page=instagramy_goodness";
+    $redirecturl = site_url() . "/wp-admin/tools.php?page=instagramy_goodness";
     return $redirecturl;
 }
 
@@ -38,4 +38,13 @@ function instagramy_goodness_sideload_image($file, $post_id, $desc = null){
         }
         return $id;
     }
+}
+
+class instagramy_goodness_status {
+    const EVERYTHINGOKAY = 0;
+    const NOTOKEN = 1;
+    const NOTNOW = 2;
+    const NOPHOTOS = 3;
+    const SIDELOADERROR = 4;
+
 }
