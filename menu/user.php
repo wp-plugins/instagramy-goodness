@@ -22,10 +22,14 @@ function instagramy_goodness_user(){
         $ig_user_day_post = sanitize_key((int)$_POST['day']);
         $ig_user_time_post = sanitize_key((int)$_POST['time']);
         $ig_user_format_post = sanitize_key($_POST['format']);
+        $ig_user_linkto_post = sanitize_key($_POST['linkto']);
+        $ig_user_captions_post = sanitize_key($_POST['use_captions']);
         $ig_user_title_post = sanitize_text_field($_POST['title']);
         update_user_option($user->ID,"instagramy_goodness_day",$ig_user_day_post, true);
         update_user_option($user->ID,"instagramy_goodness_time",$ig_user_time_post, true);
         update_user_option($user->ID,"instagramy_goodness_format",$ig_user_format_post, true);
+        update_user_option($user->ID,"instagramy_goodness_linkto",$ig_user_linkto_post, true);
+        update_user_option($user->ID,"instagramy_goodness_captions",$ig_user_captions_post, true);
         update_user_option($user->ID,"instagramy_goodness_title",$ig_user_title_post, true);
 	    ?>
 	    <div id="message" class="updated"><p><?php _e('Settings saved.');?></p></div>
@@ -86,6 +90,11 @@ function instagramy_goodness_user(){
         $ig_user_day = get_user_option("instagramy_goodness_day");
         $ig_user_time = get_user_option("instagramy_goodness_time");
         $ig_user_format = get_user_option("instagramy_goodness_format");
+        $ig_user_linkto = get_user_option("instagramy_goodness_linkto");
+        $ig_user_captions = get_user_option("instagramy_goodness_captions");
+        if($ig_user_captions === false){
+            $ig_user_captions = 1;
+        }
         $ig_user_title = get_user_option("instagramy_goodness_title");
         ?>
     <p><?php printf(__("Good job! Instagram said your name is <em>%s</em>.","instagramy_goodness"),$ig_username);?></p>
@@ -110,7 +119,10 @@ function instagramy_goodness_user(){
 	} else {
 		echo "<h3>".__("Your next post should have these images:",'instagramy_goodness')."</h3>";
 		foreach($pictures->data as $picture) {
-			printf("<a href='%s'><img src='%s' alt='%s' title='%s'></a> \n",$picture->link,$picture->images->thumbnail->url,$picture->caption->text,$picture->caption->text);
+            if(isset($picture->link)){
+                $text = isset($picture->caption) ? $picture->caption->text : "";
+                printf("<a href='%s'><img src='%s' alt='%s' title='%s'></a> \n",$picture->link,$picture->images->thumbnail->url,$text,$text);
+            }
 		}
 	}
     ?>
@@ -119,11 +131,34 @@ function instagramy_goodness_user(){
         <h3><?php _e("Title");?></h3>
         <input type="text" name="title" value="<?php echo ($ig_user_title) ? $ig_user_title : "Instagramy Goodness"; ?>">
         <h3><?php _e("Format");?></h3>
-        <select name="format">
+        <select name="format" id="ig_format">
             <option value="gallery"<?php if($ig_user_format == "gallery") echo "selected"; ?>><? _e("Gallery","instagramy_goodness"); ?></option>
             <option value="images"<?php if($ig_user_format == "images") echo "selected"; ?>><? _e("Image list","instagramy_goodness"); ?></option>
             <!-- <option value="embed"<?php if($ig_user_format == "embed") echo "selected"; ?>><? _e("Embeds","instagramy_goodness"); ?></option> -->
         </select>
+        <div id="imagelistoptions">
+            <h3><? _e("Image list options","instagramy_goodness"); ?></h3>
+            <table class='form-table'>
+                <tr>
+                    <th scope='row'><?php _e("Link to","instagramy_goodness"); ?>:</th>
+                    <td>
+                        <select name="linkto">
+                            <option value="instagram"<?php if($ig_user_linkto == "instagram") echo "selected"; ?>>Instagram</option>
+                            <option value="jpg"<?php if($ig_user_linkto == "jpg") echo "selected"; ?>>JPG</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope='row'><?php _e("Captions","instagramy_goodness"); ?>:</th>
+                    <td>
+                        <fieldset>
+                            <label><input type="radio" name="use_captions" value="1"<?php if((int)$ig_user_captions == 1) echo "checked"; ?>> <?php _e("Use captions","instagramy_goodness"); ?></label><br>
+                            <label><input type="radio" name="use_captions" value="0"<?php if((int)$ig_user_captions == 0) echo "checked"; ?>> <?php _e("Don't use captions","instagramy_goodness"); ?></label><br>
+                        </fieldset>
+                    </td>
+                </tr>
+            </table>
+        </div>
         <h3><?php _e("Post times","instagramy_goodness");?></h3>
         <table class='form-table'>
             <tr>

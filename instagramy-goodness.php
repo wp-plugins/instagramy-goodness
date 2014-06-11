@@ -3,7 +3,7 @@
 Plugin Name: Instagramy Goodness
 Plugin URI: http://lostfocus.de
 Description: Automates an blogpost with your last couple of instagram pictures
-Version: 0.2.2
+Version: 0.3
 Author: Dominik Schwind
 Author URI: http://lostfocus.de/
 License: GPL2
@@ -49,6 +49,11 @@ function instagramy_goodness_menues(){
             'instagramy_goodness_user'
         );
     }
+}
+
+function instagramy_goodness_admin_js($hook){
+    if("tools_page_instagramy_goodness" != $hook) return;
+    wp_enqueue_script( 'instagramy_goodness_admin_js', IG_URL."menu/user.js" );
 }
 
 /**
@@ -157,6 +162,9 @@ function instagramy_goodness_create_simple_post( $userid, $checkdate = true){
             $post = get_post($image['id']);
             $post->post_content = sprintf('<a href="%s">Instagram</a>',$picture->link);
             wp_update_post($post);
+
+            add_post_meta($post->ID, "instagram_id", $picture->id, true);
+            add_post_meta($post->ID, "instagram_url", $picture->images->standard_resolution->url, true);
             $images[] = $image;
         } else {
           $status = instagramy_goodness_status::SIDELOADERROR;
@@ -188,19 +196,28 @@ function instagramy_goodness_create_simple_post( $userid, $checkdate = true){
             $content = implode("\n\n",$frames);
             break;
         default:
+            $ig_user_linkto = get_user_option("instagramy_goodness_linkto",$userid);
+            if(!$ig_user_linkto){
+                $ig_user_linkto = "instagram";
+            }
+            $ig_user_captions = get_user_option("instagramy_goodness_captions",$userid);
+            if($ig_user_captions === false){
+                $ig_user_captions = 1;
+            }
             $img = array();
             foreach($images as $image){
                 $src = wp_get_attachment_url( $image['id'] );
                 $alt = isset($image['title']) ? esc_attr($image['title']) : '';
+                $link = ($ig_user_linkto == "instagram") ? $image['link'] : $src;
                 if(version_compare($wp_version,"3.9") >= 0){
-                    $html = sprintf('<figure><a href="%s"><img src="%s" alt="%s"></a>',$image['link'],$src,$alt);
-                    if($alt != ''){
+                    $html = sprintf('<figure><a href="%s"><img src="%s" alt="%s"></a>',$link,$src,$alt);
+                    if(($alt != '') && ($ig_user_captions > 0)){
                         $html .= sprintf("<figcaption>%s</figcaption>",$alt);
                     }
                     $html .= '</figure>';
                 } else {
                     $html = sprintf('<p><a href="%s"><img src="%s" alt="%s"></a>',$image['link'],$src,$alt);
-                    if($alt != ''){
+                    if(($alt != '') && ($ig_user_captions > 0)){
                         $html .= '<br>'.$alt;
                     }
                     $html .= '</p>';
@@ -251,6 +268,7 @@ function instagramy_goodness_setup_schedule() {
 add_action( 'admin_menu', 'instagramy_goodness_menues' );
 add_action( 'wp', 'instagramy_goodness_setup_schedule' );
 add_action( 'instagramy_goodness_hourly_event', 'instagramy_goodness_create_all_the_posts' );
+add_action( 'admin_enqueue_scripts', 'instagramy_goodness_admin_js' );
 
 /* Load textdomain */
 
