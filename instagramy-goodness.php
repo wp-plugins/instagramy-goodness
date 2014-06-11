@@ -3,7 +3,7 @@
 Plugin Name: Instagramy Goodness
 Plugin URI: http://lostfocus.de
 Description: Automates an blogpost with your last couple of instagram pictures
-Version: 0.1
+Version: 0.3
 Author: Dominik Schwind
 Author URI: http://lostfocus.de/
 License: GPL2
@@ -23,7 +23,6 @@ License: GPL2
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
-
 define('IG_PATH', plugin_dir_path(__FILE__));
 define('IG_URL', plugin_dir_url(__FILE__));
 
@@ -52,7 +51,18 @@ function instagramy_goodness_menues(){
     }
 }
 
-function instagramy_goodness_create_simple_post($userid){
+function instagramy_goodness_admin_js($hook){
+    if("tools_page_instagramy_goodness" != $hook) return;
+    wp_enqueue_script( 'instagramy_goodness_admin_js', IG_URL."menu/user.js" );
+}
+
+/**
+ * @param $userid
+ * @param bool $checkdate
+ * @returns instagramy_goodness_status $status
+ */
+
+function instagramy_goodness_create_simple_post( $userid, $checkdate = true){
     global $wp_version;
     $token = get_user_option("instagramy_goodness_token",$userid);
     $ig_userid = get_user_option("instagramy_goodness_id",$userid);
@@ -61,8 +71,9 @@ function instagramy_goodness_create_simple_post($userid){
      * If there is no token or no user id, we just silently fail.
      */
     if(!$token || !$ig_userid){
-        return false; // goto fail;
+        return instagramy_goodness_status::NOTOKEN;
     }
+    $status = instagramy_goodness_status::EVERYTHINGOKAY;
 
     /*
      * Either get the last timestamp OR setting it to one week ago.
@@ -73,21 +84,24 @@ function instagramy_goodness_create_simple_post($userid){
         $lastpost = time() - WEEK_IN_SECONDS;
     }
 
-    /*
-     * Getting the user's day/time setting and comparing it to now.
-     */
-    $ig_user_day = get_user_option("instagramy_goodness_day",$userid);
-    $ig_user_time = get_user_option("instagramy_goodness_time",$userid);
 
-    $day_now = date("w");
-    $time_now = floor(date("G") / 6);
+	if($checkdate){
+		/*
+		 * Getting the user's day/time setting and comparing it to now.
+		 */
+		$ig_user_day = get_user_option("instagramy_goodness_day",$userid);
+		$ig_user_time = get_user_option("instagramy_goodness_time",$userid);
 
-    if(
-        ($ig_user_day != $day_now) ||
-        ($ig_user_time != $time_now) ||
-        ($lastpost > (time() - DAY_IN_SECONDS))) {
-        return false;
-    }
+		$day_now = date("w");
+		$time_now = floor(date("G") / 6);
+
+		if(
+			($ig_user_day != $day_now) ||
+			($ig_user_time != $time_now) ||
+			($lastpost > (time() - DAY_IN_SECONDS))) {
+            return instagramy_goodness_status::NOTNOW;
+		}
+	}
 
     $user = get_userdata($userid);
 
@@ -106,7 +120,7 @@ function instagramy_goodness_create_simple_post($userid){
 
     // If there are no pictures, we can go home
     if(count($pictures->data) < 1){
-        return false;
+        return instagramy_goodness_status::NOPHOTOS;
     }
 
     $ig_user_title = get_user_option("instagramy_goodness_title",$userid);
@@ -148,12 +162,17 @@ function instagramy_goodness_create_simple_post($userid){
             $post = get_post($image['id']);
             $post->post_content = sprintf('<a href="%s">Instagram</a>',$picture->link);
             wp_update_post($post);
+
+            add_post_meta($post->ID, "instagram_id", $picture->id, true);
+            add_post_meta($post->ID, "instagram_url", $picture->images->standard_resolution->url, true);
             $images[] = $image;
+        } else {
+          $status = instagramy_goodness_status::SIDELOADERROR;
         }
     }
 
     if(count($images) < 1) {
-        return false; // this happens when there are errors with the sideloading. Uhm.
+        return $status; // this happens when there are errors with the sideloading. Uhm.
     }
 
     //
@@ -177,19 +196,28 @@ function instagramy_goodness_create_simple_post($userid){
             $content = implode("\n\n",$frames);
             break;
         default:
+            $ig_user_linkto = get_user_option("instagramy_goodness_linkto",$userid);
+            if(!$ig_user_linkto){
+                $ig_user_linkto = "instagram";
+            }
+            $ig_user_captions = get_user_option("instagramy_goodness_captions",$userid);
+            if($ig_user_captions === false){
+                $ig_user_captions = 1;
+            }
             $img = array();
             foreach($images as $image){
                 $src = wp_get_attachment_url( $image['id'] );
                 $alt = isset($image['title']) ? esc_attr($image['title']) : '';
+                $link = ($ig_user_linkto == "instagram") ? $image['link'] : $src;
                 if(version_compare($wp_version,"3.9") >= 0){
-                    $html = sprintf('<figure><a href="%s"><img src="%s" alt="%s"></a>',$image['link'],$src,$alt);
-                    if($alt != ''){
+                    $html = sprintf('<figure><a href="%s"><img src="%s" alt="%s"></a>',$link,$src,$alt);
+                    if(($alt != '') && ($ig_user_captions > 0)){
                         $html .= sprintf("<figcaption>%s</figcaption>",$alt);
                     }
                     $html .= '</figure>';
                 } else {
                     $html = sprintf('<p><a href="%s"><img src="%s" alt="%s"></a>',$image['link'],$src,$alt);
-                    if($alt != ''){
+                    if(($alt != '') && ($ig_user_captions > 0)){
                         $html .= '<br>'.$alt;
                     }
                     $html .= '</p>';
@@ -217,12 +245,13 @@ function instagramy_goodness_create_simple_post($userid){
 
     wp_mail($user->get("user_email"),__("New instagramy goodness post","instagramy_goodness"),$content);
     update_user_option($userid,"instagramy_goodness_lastpost",$lastpicturetime,true);
+    return $status;
 }
 
 function instagramy_goodness_create_all_the_posts(){
     $users = get_users();
     foreach($users as $user){
-        instagramy_goodness_create_simple_post($user->ID);
+        instagramy_goodness_create_simple_post( $user->ID, true );
     }
 }
 
@@ -239,6 +268,7 @@ function instagramy_goodness_setup_schedule() {
 add_action( 'admin_menu', 'instagramy_goodness_menues' );
 add_action( 'wp', 'instagramy_goodness_setup_schedule' );
 add_action( 'instagramy_goodness_hourly_event', 'instagramy_goodness_create_all_the_posts' );
+add_action( 'admin_enqueue_scripts', 'instagramy_goodness_admin_js' );
 
 /* Load textdomain */
 
